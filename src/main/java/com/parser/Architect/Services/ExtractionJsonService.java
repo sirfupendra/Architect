@@ -34,6 +34,8 @@ public class ExtractionJsonService {
                 schemaDefinition.getModelName());
         output=cleanAiResponse(output);
 
+
+
         List<String> errors = calculateErrors(output, optimizedSchema);
 
         while (!errors.isEmpty() && retry<=maxretry) {
@@ -49,6 +51,7 @@ public class ExtractionJsonService {
 
 
             errors = calculateErrors(output, optimizedSchema);
+            retry++;
   log.info("left Errors = "+ errors);
 
         }

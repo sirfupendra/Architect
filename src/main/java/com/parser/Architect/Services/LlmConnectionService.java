@@ -26,13 +26,17 @@ public class LlmConnectionService {
     public LlmResponse sendRequest(String url, String connectionKey, String description, String modelName, JsonNode jsonData) {
 
         List<LlmRequest.Message> messages = List.of(
-                new LlmRequest.Message("system", "You are a JSON architect. Task: " + description),
-                new LlmRequest.Message("user", "Analyze and refine this JSON: " + jsonData.toString())
+                new LlmRequest.Message("system", "You are a specialized JSON architect. " +
+                        "You must return ONLY a raw JSON object. " +
+                        "Do not include any conversational text, markdown formatting (like ```json), or explanations. " +
+                        "Your entire response must be a single valid JSON object."),
+                new LlmRequest.Message("user", "Task: " + description + "\nData: " + jsonData.toString())
         );
 
         LlmRequest llmRequest = LlmRequest.builder()
                 .model(modelName)
                 .messages(messages)
+                .response_format(new LlmRequest.ResponseFormat("json_object"))
                 .build();
 
         return webClientBuilder.baseUrl(url).build()
@@ -58,6 +62,7 @@ public class LlmConnectionService {
         LlmRequest llmRequest = LlmRequest.builder()
                 .model(modelName)
                 .messages(messages)
+                .response_format(new LlmRequest.ResponseFormat("json_object"))
                 .build();
         return webClientBuilder.baseUrl(llmModels.getModelUrl()).build()
                 .post()
@@ -91,6 +96,7 @@ public class LlmConnectionService {
         LlmRequest llmRequest = LlmRequest.builder()
                 .model(modelName)
                 .messages(messages)
+                .response_format(new LlmRequest.ResponseFormat("json_object"))
                 .build();
      LlmResponse llmResponse=webClientBuilder.baseUrl(llmModels.getModelUrl()).build()
              .post()

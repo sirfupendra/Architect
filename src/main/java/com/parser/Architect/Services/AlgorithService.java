@@ -1,5 +1,7 @@
 package com.parser.Architect.Services;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.parser.Architect.Dtos.Request.ArchitectRequest;
 import com.parser.Architect.Dtos.Response.LlmResponse;
 import com.parser.Architect.Entites.LlmModels;
@@ -18,6 +20,7 @@ public class AlgorithService {
     private final LlmModelsRepository llmModelsRepository;
     private final LlmConnectionService llmConnectionService;
     private final SchemaDefinitionRepository schemaDefinitionRepository;
+    //private final ObjectMapper objectMapper;
     public void refineJsonForBetterPerformance(ArchitectRequest architectRequest){
          try{
           LlmModels llmModels =llmModelsRepository.findByModelNameContaining(architectRequest.getLlmModel());
@@ -28,8 +31,22 @@ public class AlgorithService {
                String rawOutput=response.getChoices().get(0).getMessage().getContent();
                log.info(rawOutput);
                String cleanedJson = cleanAiResponse(rawOutput);
-               SchemaDefinition schemaDefinition=    SchemaDefinition.builder().optimizedSchema(cleanedJson).modelName(architectRequest.getLlmModel()).originalSchema(architectRequest.getJsonData().toString()).build();
-               schemaDefinitionRepository.save(schemaDefinition);
+               try {
+                   // This validates that the extracted string is actually valid JSON
+                   ObjectMapper objectMapper=new ObjectMapper();
+                   JsonNode validatedJson = objectMapper.readTree(cleanedJson);
+                   String finalJson = objectMapper.writeValueAsString(validatedJson);
+
+                   SchemaDefinition schemaDefinition = SchemaDefinition.builder()
+                           .optimizedSchema(finalJson)
+                           .modelName(architectRequest.getLlmModel())
+                           .originalSchema(architectRequest.getJsonData().toString())
+                           .build();
+
+                   schemaDefinitionRepository.save(schemaDefinition);
+               } catch (Exception e) {
+                   log.error("AI returned invalid JSON: {}", cleanedJson);
+               }
            }
 
          }
@@ -39,7 +56,7 @@ public class AlgorithService {
     }
     private String cleanAiResponse(String content) {
         if (content == null) return "{}";
-         content.replaceAll("```json", "")
+         content=content.replaceAll("```json", "")
                 .replaceAll("```", "")
                 .trim();
         int start = content.indexOf("{");

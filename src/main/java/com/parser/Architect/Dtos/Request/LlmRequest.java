@@ -12,7 +12,14 @@ import java.util.List;
 @Builder
 public class LlmRequest {
     private String model;
-    private List<Message> messages; // Changed from String[] to List<Message>
+    private List<Message> messages;
+    private ResponseFormat response_format; // Added this
+
+    @Data
+    @AllArgsConstructor
+    public static class ResponseFormat {
+        private String type; // usually "json_object"
+    }// Changed from String[] to List<Message>
 
     @Data
     @AllArgsConstructor

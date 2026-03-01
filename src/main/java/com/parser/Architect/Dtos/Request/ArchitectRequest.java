@@ -17,6 +17,7 @@ public class ArchitectRequest {
     @NotEmpty
     private JsonNode[] seedDataSet;
 
+    @NotNull
     private String LlmModel;
 
 }
