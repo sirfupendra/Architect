@@ -23,6 +23,7 @@ public class AlgorithmController {
     public void refineJson(@RequestBody ArchitectRequest architectRequest){
         log.info(String.valueOf(architectRequest.getJsonData().getNodeType()));
         algorithService.refineJsonForBetterPerformance(architectRequest);
+
     }
 
 }
