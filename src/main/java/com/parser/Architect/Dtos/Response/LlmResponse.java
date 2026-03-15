@@ -1,7 +1,7 @@
 package com.parser.Architect.Dtos.Response;
 
 import lombok.Data;
-import tools.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.JsonNode;
 
 import java.util.List;
 

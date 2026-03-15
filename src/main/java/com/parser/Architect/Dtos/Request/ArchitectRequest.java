@@ -4,7 +4,7 @@ import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.Setter;
-import tools.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.JsonNode;
 
 @Getter
 @Setter
@@ -14,7 +14,7 @@ public class ArchitectRequest {
 
     private String Description;
 
-    @NotEmpty
+    /** Optional seed examples for synthetic data generation. Can be null or empty. */
     private JsonNode[] seedDataSet;
 
     @NotNull

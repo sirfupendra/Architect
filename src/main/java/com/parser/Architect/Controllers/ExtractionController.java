@@ -8,13 +8,18 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
+import jakarta.validation.Valid;
+
 @RestController
 @RequiredArgsConstructor
 public class ExtractionController {
-   private final ExtractionJsonService extractionJsonService;
+
+    private final ExtractionJsonService extractionJsonService;
+
+    /** PARSE SCOPE: Extract structured JSON from text using optimized schema (and optional RELAY). */
     @PostMapping("/extractJsonForText")
-    public ResponseEntity extractJsonData(@RequestBody ExtractionRequest extractionRequest){
+    public ResponseEntity<String> extractJsonData(@Valid @RequestBody ExtractionRequest extractionRequest) {
         String res=extractionJsonService.JsonFromText(extractionRequest);
-        return ResponseEntity.status(200).body(res);
+        return ResponseEntity.ok(res);
     }
 }

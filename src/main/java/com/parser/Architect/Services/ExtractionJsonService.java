@@ -7,10 +7,6 @@ import com.parser.Architect.Repositories.SchemaDefinitionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-
-import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -19,105 +15,66 @@ import java.util.List;
 public class ExtractionJsonService {
     private final SchemaDefinitionRepository schemaDefinitionRepository;
     private final LlmConnectionService llmConnectionService;
+    private final SchemaGuardrailsService schemaGuardrailsService;
+    private final RelayService relayService;
 
+    /** SCOPE: extract from text using optimized schema, with guardrails and optional RELAY transform. */
     public String JsonFromText(ExtractionRequest extractionRequest) {
-      int retry=1;
-      int maxretry=3;
+        int retry = 1;
+        int maxRetry = 3;
         SchemaDefinition schemaDefinition =
                 schemaDefinitionRepository.findById(extractionRequest.getSchemaId())
                         .orElseThrow(() -> new RuntimeException("Schema not found"));
 
-        String optimizedSchema = schemaDefinition.getOptimizedSchema();
-        optimizedSchema=cleanAiResponse(optimizedSchema);
-        String output = callLlm(optimizedSchema,
-                extractionRequest.getText(),
-                schemaDefinition.getModelName());
-        output=cleanAiResponse(output);
+        String optimizedSchema = cleanAiResponse(schemaDefinition.getOptimizedSchema());
+        String sourceText = extractionRequest.getText();
+        String output = callLlm(optimizedSchema, sourceText, schemaDefinition.getModelName());
+        output = cleanAiResponse(output);
 
+        List<String> errors = schemaGuardrailsService.validate(output, optimizedSchema, sourceText);
 
-
-        List<String> errors = calculateErrors(output, optimizedSchema);
-
-        while (!errors.isEmpty() && retry<=maxretry) {
-
+        while (!errors.isEmpty() && retry <= maxRetry) {
             output = llmConnectionService.retryWithErrors(
-                    output,
-                    errors,
-                    optimizedSchema,
-                    extractionRequest.getText(),
-                    schemaDefinition.getModelName()
-            );
-            output=cleanAiResponse(output);
-
-
-            errors = calculateErrors(output, optimizedSchema);
+                    output, errors, optimizedSchema, sourceText, schemaDefinition.getModelName());
+            output = cleanAiResponse(output);
+            errors = schemaGuardrailsService.validate(output, optimizedSchema, sourceText);
             retry++;
-  log.info("left Errors = "+ errors);
-
+            log.info("SCOPE retry {} - remaining errors: {}", retry - 1, errors);
         }
 
+        if (schemaDefinition.getRelayTransformSpec() != null && !schemaDefinition.getRelayTransformSpec().isBlank()) {
+            output = relayService.applyTransform(output, schemaDefinition.getRelayTransformSpec());
+        }
         return output;
     }
 
-    private String callLlm(String optimizedSchema, String Text,  String modelName) {
-     LlmResponse llmResponse=llmConnectionService.JsonFromText(optimizedSchema,Text,modelName);
-     return llmResponse.getChoices().get(0).getMessage().getContent();
-    }
-
-    private List<String> calculateErrors(String llmResponse, String optimizedSchema) {
-        List<String> errors = new ArrayList<>();
-
-        try {
-            ObjectMapper mapper = new ObjectMapper();
-            JsonNode responseNode = mapper.readTree(llmResponse);
-            JsonNode schemaNode = mapper.readTree(optimizedSchema);
-
-            schemaNode.fieldNames().forEachRemaining(field -> {
-
-
-                if (!responseNode.has(field)) {
-                    errors.add("Missing field: " + field);
-                    return;
-                }
-
-                JsonNode fieldSchema = schemaNode.get(field);
-                JsonNode valueNode = responseNode.get(field);
-
-
-                if (fieldSchema.has("type")) {
-                    String expectedType = fieldSchema.get("type").asText();
-
-                    switch (expectedType) {
-                        case "string":
-                            if (!valueNode.isTextual()) {
-                                errors.add("Field " + field + " must be string");
-                            }
-                            break;
-
-                        case "integer":
-                            if (!valueNode.isInt()) {
-                                errors.add("Field " + field + " must be integer");
-                            }
-                            break;
-
-                        case "number":
-                            if (!valueNode.isNumber()) {
-                                errors.add("Field " + field + " must be number");
-                            }
-                            break;
-                    }
-                }
-            });
-
-        } catch (Exception e) {
-            errors.add("Invalid JSON format");
+    /** Used by ARCHITECT to evaluate a schema on synthetic examples (no RELAY). */
+    public String extractWithSchema(String optimizedSchema, String text, String modelName) {
+        String output = callLlm(optimizedSchema, text, modelName);
+        output = cleanAiResponse(output);
+        List<String> errors = schemaGuardrailsService.validate(output, optimizedSchema, text);
+        int retries = 0;
+        while (!errors.isEmpty() && retries < 2) {
+            output = llmConnectionService.retryWithErrors(output, errors, optimizedSchema, text, modelName);
+            output = cleanAiResponse(output);
+            errors = schemaGuardrailsService.validate(output, optimizedSchema, text);
+            retries++;
         }
-
-        return errors;
+        return output;
     }
+
+    private String callLlm(String optimizedSchema, String text, String modelName) {
+        LlmResponse llmResponse = llmConnectionService.JsonFromText(optimizedSchema, text, modelName);
+        if (llmResponse == null || llmResponse.getChoices() == null || llmResponse.getChoices().isEmpty()) {
+            return "{}";
+        }
+        String content = llmResponse.getChoices().get(0).getMessage().getContent();
+        return content != null ? content : "{}";
+    }
+
     private String cleanAiResponse(String content) {
         if (content == null) return "{}";
-        content.replaceAll("```json", "")
+        content = content.replaceAll("```json", "")
                 .replaceAll("```", "")
                 .trim();
         int start = content.indexOf("{");

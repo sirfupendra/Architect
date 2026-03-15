@@ -26,6 +26,10 @@ public class SchemaDefinition {
     @Column(columnDefinition = "TEXT")
     private String optimizedSchema;
 
+    /** RELAY: transformation spec or code to map optimized output back to original schema format. */
+    @Column(columnDefinition = "TEXT")
+    private String relayTransformSpec;
+
     private String modelName;
 
 }
