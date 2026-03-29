@@ -10,12 +10,12 @@ import com.fasterxml.jackson.databind.JsonNode;
 @Setter
 public class ArchitectRequest {
     @NotNull
-    private JsonNode jsonData;
+    private Object jsonData;
 
     private String Description;
 
     /** Optional seed examples for synthetic data generation. Can be null or empty. */
-    private JsonNode[] seedDataSet;
+    private Object[] seedDataSet;
 
     @NotNull
     private String LlmModel;

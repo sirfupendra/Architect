@@ -2,6 +2,7 @@ package com.parser.Architect.Controllers;
 
 import com.parser.Architect.Dtos.Request.ArchitectRequest;
 import com.parser.Architect.Dtos.Response.ArchitectResponse;
+import com.parser.Architect.Producer.ArchitectRequestEvent;
 import com.parser.Architect.Services.AlgorithService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,7 +18,7 @@ import jakarta.validation.Valid;
 @RequiredArgsConstructor
 public class AlgorithmController {
 
-    private final AlgorithService algorithService;
+    private final ArchitectRequestEvent producer;
 
     /**
      * PARSE ARCHITECT: Optimizes JSON schema for LLM extraction and persists it.
@@ -26,10 +27,9 @@ public class AlgorithmController {
     @PostMapping("/parseJson")
     public ResponseEntity<ArchitectResponse> refineJson(@Valid @RequestBody ArchitectRequest architectRequest) {
         log.info("ARCHITECT request for model {}", architectRequest.getLlmModel());
-        Long schemaId = algorithService.refineJsonForBetterPerformance(architectRequest);
+        producer.send(architectRequest);
         return ResponseEntity.ok(ArchitectResponse.builder()
-                .schemaId(schemaId)
-                .message("Schema optimized and saved. Use schemaId for extraction.")
+                .message("Schema optimization in progess u willnotify soon")
                 .build());
     }
 }

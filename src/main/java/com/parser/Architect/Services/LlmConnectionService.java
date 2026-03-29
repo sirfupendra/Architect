@@ -1,5 +1,6 @@
 package com.parser.Architect.Services;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.parser.Architect.Dtos.Request.LlmRequest;
 import com.parser.Architect.Dtos.Response.LlmResponse;
 import com.parser.Architect.Entites.LlmModels;
@@ -22,33 +23,75 @@ public class LlmConnectionService {
     private final LlmModelsRepository llmModelsRepository;
 
     private LlmResponse post(String url, String key, String modelName, List<LlmRequest.Message> messages) {
-        return webClientBuilder.baseUrl(url).build()
-                .post()
-                .header("Authorization", "Bearer " + key)
-                .bodyValue(LlmRequest.builder()
-                        .model(modelName)
-                        .messages(messages)
-                        .response_format(new LlmRequest.ResponseFormat("json_object"))
-                        .build())
-                .retrieve()
-                .bodyToMono(LlmResponse.class)
-                .block();
+        try {
+            return webClientBuilder.baseUrl(url)
+                    .build()
+                    .post()
+                    .bodyValue(
+                            LlmRequest.builder()
+                                    .model(modelName)
+                                    .messages(messages)
+                                    .build()
+                    )
+                    .retrieve()
+                    .bodyToMono(LlmResponse.class)
+                    .block();
+
+        } catch (org.springframework.web.reactive.function.client.WebClientResponseException e) {
+
+            log.error("LLM ERROR STATUS: {}", e.getStatusCode());
+            log.error("LLM ERROR BODY: {}", e.getResponseBodyAsString());
+
+            throw e;
+        }
+
     }
 
     /** ARCHITECT: Generate initial JSON schema from task (and optional example). */
-    public String generateSchema(String taskDescription, String modelName, JsonNode optionalExampleSchema) {
-        LlmModels m = llmModelsRepository.findByModelNameContaining(modelName);
-        String user = String.format(ParsePrompts.SCHEMA_GENERATOR_USER_TEMPLATE, taskDescription);
-        if (optionalExampleSchema != null && !optionalExampleSchema.isEmpty()) {
-            user += "\n\nExample/reference schema:\n" + optionalExampleSchema.toString();
+    public String generateSchema(String taskDescription, String modelName, Object optionalExampleSchema) {
+
+        try {
+
+            LlmModels m = llmModelsRepository.findByModelNameContaining(modelName);
+
+            String user = String.format(ParsePrompts.SCHEMA_GENERATOR_USER_TEMPLATE, taskDescription);
+
+            if (optionalExampleSchema != null) {
+                ObjectMapper mapper = new ObjectMapper();
+                user += "\n\nExample/reference schema:\n" +
+                        mapper.writerWithDefaultPrettyPrinter()
+                                .writeValueAsString(optionalExampleSchema);
+            }
+
+            LlmResponse r = post(
+                    m.getModelUrl(),
+                    m.getMyConnectionKey(),
+                    modelName,
+                    List.of(
+                            new LlmRequest.Message("system", ParsePrompts.SCHEMA_GENERATOR_SYSTEM),
+                            new LlmRequest.Message("user", user)
+                    )
+            );
+
+            if (r != null && r.getChoices() != null && !r.getChoices().isEmpty()) {
+                return r.getChoices().get(0).getMessage().getContent();
+            }
+
         }
-        LlmResponse r = post(m.getModelUrl(), m.getMyConnectionKey(), modelName,
-                List.of(
-                        new LlmRequest.Message("system", ParsePrompts.SCHEMA_GENERATOR_SYSTEM),
-                        new LlmRequest.Message("user", user)
-                ));
-        return r != null && r.getChoices() != null && !r.getChoices().isEmpty()
-                ? r.getChoices().get(0).getMessage().getContent() : "{}";
+        catch (org.springframework.web.reactive.function.client.WebClientResponseException e) {
+
+            log.error("LLM call failed");
+            log.error("Status Code: {}", e.getStatusCode());
+            log.error("Response Body: {}", e.getResponseBodyAsString());
+
+        }
+        catch (Exception e) {
+
+            log.error("Unexpected error in generateSchema: {}", e.getMessage(), e);
+
+        }
+
+        return "{}";
     }
 
     /** ARCHITECT: Generate synthetic test examples (input_text, ground_truth, challenge). */

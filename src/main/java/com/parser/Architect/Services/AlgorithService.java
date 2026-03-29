@@ -9,6 +9,8 @@ import com.parser.Architect.Util.LlmResponseUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.HttpServerErrorException;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -39,7 +41,15 @@ public class AlgorithService {
         try {
             String task = architectRequest.getDescription() != null ? architectRequest.getDescription() : "";
             String modelName = architectRequest.getLlmModel();
-            String originalSchemaJson = architectRequest.getJsonData() != null ? architectRequest.getJsonData().toString() : "{}";
+            String originalSchemaJson = "{}";
+
+            try {
+                if (architectRequest.getJsonData() != null) {
+                    originalSchemaJson = objectMapper.writeValueAsString(architectRequest.getJsonData());
+                }
+            } catch (Exception e) {
+                log.warn("Failed to serialize schema to JSON", e);
+            }
             String seedJson = formatSeedData(architectRequest.getSeedDataSet());
 
             // Step 1: Generate initial optimized schema
@@ -111,13 +121,22 @@ public class AlgorithService {
             schemaDefinition = schemaDefinitionRepository.save(schemaDefinition);
             log.info("ARCHITECT: saved SchemaDefinition id={}", schemaDefinition.getId());
             return schemaDefinition.getId();
-        } catch (Exception e) {
+        }
+        catch (HttpClientErrorException e) {
+            log.error("ARCHITECT failed: {}", e.getResponseBodyAsString(), e);
+            throw new RuntimeException("Schema refinement failed", e);
+        }
+        catch (HttpServerErrorException e) {
+            log.error("ARCHITECT failed: {}", e.getResponseBodyAsString(), e);
+            throw new RuntimeException("Schema refinement failed", e);
+        }
+        catch(Exception e){
             log.error("ARCHITECT failed: {}", e.getMessage(), e);
             throw new RuntimeException("Schema refinement failed", e);
         }
     }
 
-    private String formatSeedData(JsonNode[] seedDataSet) {
+    private String formatSeedData(Object[] seedDataSet) {
         if (seedDataSet == null || seedDataSet.length == 0) return "[]";
         try {
             return objectMapper.writeValueAsString(seedDataSet);
