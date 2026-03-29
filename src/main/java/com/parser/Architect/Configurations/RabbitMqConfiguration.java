@@ -1,6 +1,12 @@
 package com.parser.Architect.Configurations;
 
 import org.springframework.amqp.core.*;
+import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory;
+import org.springframework.amqp.rabbit.connection.ConnectionFactory;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
+
+import org.springframework.amqp.support.converter.JacksonJsonMessageConverter;
+import org.springframework.amqp.support.converter.MessageConverter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -21,6 +27,31 @@ public class RabbitMqConfiguration {
     public static final String RETRY_ROUTING_KEY = "retry.routing.key";
     public static final String DLQ_ROUTING_KEY = "dlq.routing.key";
 
+
+    // ---------------- MESSAGE CONVERTER ----------------
+
+    @Bean
+    public MessageConverter jsonMessageConverter() {
+        return new JacksonJsonMessageConverter(); // no-arg is correct for Spring AMQP 4.x
+    }
+
+    @Bean
+    public RabbitTemplate rabbitTemplate(ConnectionFactory connectionFactory,
+                                         MessageConverter jsonMessageConverter) {
+        RabbitTemplate template = new RabbitTemplate(connectionFactory);
+        template.setMessageConverter(jsonMessageConverter);
+        return template;
+    }
+
+    @Bean
+    public SimpleRabbitListenerContainerFactory rabbitListenerContainerFactory(
+            ConnectionFactory connectionFactory,
+            MessageConverter jsonMessageConverter) {
+        SimpleRabbitListenerContainerFactory factory = new SimpleRabbitListenerContainerFactory();
+        factory.setConnectionFactory(connectionFactory);
+        factory.setMessageConverter(jsonMessageConverter);
+        return factory;
+    }
     // ---------------- EXCHANGES ----------------
 
     @Bean
