@@ -104,9 +104,13 @@ public class AlgorithService {
             // Step 3: RELAY - generate transformation spec (optimized -> original)
             String relaySpec = "{}";
             try {
+                log.info("upendra reached on relay");
                 String relayRaw = llmConnectionService.generateRelaySpec(originalSchemaJson, currentSchema, modelName);
                 relaySpec = LlmResponseUtils.extractJson(relayRaw);
-                if (!relaySpec.startsWith("{")) relaySpec = "{}";
+                if (!relaySpec.startsWith("{")) {
+                    relaySpec = "{}";
+                    log.info("upendra completed relay");
+                }
             } catch (Exception e) {
                 log.warn("RELAY spec generation failed: {}", e.getMessage());
             }

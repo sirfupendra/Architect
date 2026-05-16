@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Component;
 
 import static com.parser.Architect.Configurations.RabbitMqConfiguration.*;
@@ -23,32 +24,25 @@ public class ArchitectRequestConsumer {
     private static final int MAX_RETRIES = 2;
 
     @RabbitListener(queues = MAIN_QUEUE)
-    public void Consume(ArchitectRequest architectRequest){
-        try{
-            log.info("processing Architect Request", architectRequest);
+    @RabbitListener(queues = MAIN_QUEUE)
+    public void Consume(ArchitectRequest architectRequest,
+                        @Header(required = false, value = "x-retry-count") Integer retryCount) {
+        try {
+            log.info("processing Architect Request");
             Long schemaId = algorithService.refineJsonForBetterPerformance(architectRequest);
-
-            CompletedArchitectRequests completedArchitectRequests= CompletedArchitectRequests.builder().schemaId(schemaId).build();
-
-            completedArchitectRequestsRepo.save(completedArchitectRequests);
-
-        }
-        catch (Exception e){
-            int retryCount = 1;
-            if (retryCount < MAX_RETRIES){
-                // Send to retry queue
-                retryCount++;
-                rabbitTemplate.convertAndSend(
-                        RETRY_EXCHANGE,
-                        RETRY_ROUTING_KEY,
-                        architectRequest
-                );
-            }
-            else{
-                rabbitTemplate.convertAndSend(MAIN_EXCHANGE,DLQ_ROUTING_KEY,architectRequest);
+            completedArchitectRequestsRepo.save(
+                    CompletedArchitectRequests.builder().schemaId(schemaId).build()
+            );
+        } catch (Exception e) {
+            int count = retryCount == null ? 0 : retryCount;
+            if (count < MAX_RETRIES) {
+                rabbitTemplate.convertAndSend(RETRY_EXCHANGE, RETRY_ROUTING_KEY, architectRequest, msg -> {
+                    msg.getMessageProperties().getHeaders().put("x-retry-count", count + 1);
+                    return msg;
+                });
+            } else {
+                rabbitTemplate.convertAndSend(MAIN_EXCHANGE, DLQ_ROUTING_KEY, architectRequest);
             }
         }
-
-
     }
 }
