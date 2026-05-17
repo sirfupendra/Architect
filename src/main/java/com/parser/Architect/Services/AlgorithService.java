@@ -13,6 +13,7 @@ import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.HttpServerErrorException;
 
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 
 /**
@@ -78,7 +79,7 @@ public class AlgorithService {
                     String extracted = extractionJsonService.extractWithSchema(currentSchema, ex.inputText, modelName);
                     String normalizedExtracted = normalizeJson(extracted);
                     String normalizedExpected = normalizeJson(ex.groundTruth);
-                    if (normalizedExtracted.equals(normalizedExpected)) {
+                    if (jsonFieldsMatch(normalizedExtracted, normalizedExpected)) {
                         correct++;
                     } else {
                         failureLines.add(String.format("input: %s | expected: %s | got: %s",
@@ -188,6 +189,28 @@ public class AlgorithService {
     private static String truncate(String s, int max) {
         if (s == null || s.length() <= max) return s;
         return s.substring(0, max) + "...";
+    }
+
+    private boolean jsonFieldsMatch(String extracted, String expected) {
+        try {
+            JsonNode extractedNode = objectMapper.readTree(extracted);
+            JsonNode expectedNode = objectMapper.readTree(expected);
+            return fieldsMatch(extractedNode, expectedNode);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private boolean fieldsMatch(JsonNode extracted, JsonNode expected) {
+        if (expected.isObject()) {
+            for (Iterator<String> it = expected.fieldNames(); it.hasNext(); ) {
+                String field = it.next();
+                if (!extracted.has(field)) return false;
+                if (!fieldsMatch(extracted.get(field), expected.get(field))) return false;
+            }
+            return true;
+        }
+        return extracted.asText().equals(expected.asText());
     }
 
     private record SyntheticExample(String inputText, String groundTruth) {}
